@@ -1,0 +1,85 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hybrid-fraud-intelligence"
+dynamic = ["version"]
+description = "Hybrid relational-temporal GNN (RB-GNN + TGNN + attention fusion) for real-time fraud detection"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Tanvir Mahtab"},
+    {name = "Hybrid Theory Research"},
+]
+keywords = ["fraud-detection", "gnn", "graph-neural-network", "pytorch-geometric", "neo4j", "temporal-graph"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
+]
+
+dependencies = [
+    "torch>=2.1.0",
+    "torch-geometric>=2.4.0",
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "neo4j>=5.14.0",
+    "pydantic>=2.5.0",
+    "pyyaml>=6.0",
+    "scikit-learn>=1.3.0",
+    "pandas>=2.1.0",
+    "numpy>=1.26.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "httpx>=0.25.0",   # required by fastapi.testclient
+    "ruff>=0.4.0",
+    "mypy>=1.7.0",
+]
+jupyter = [
+    "jupyter>=1.0.0",
+    "matplotlib>=3.8.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/Kingpin139/hybrid-fraud-intelligence"
+Issues = "https://github.com/Kingpin139/hybrid-fraud-intelligence/issues"
+Changelog = "https://github.com/Kingpin139/hybrid-fraud-intelligence/blob/main/CHANGELOG.md"
+
+[tool.setuptools.dynamic]
+version = {attr = "hybrid_fraud.__version__"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+hybrid_fraud = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = ["notebooks", "*.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B"]
+ignore = [
+    "N812",  # `import torch.nn.functional as F` is the universal PyTorch convention
+    "N803",  # G / T / S argument names mirror the paper equation
+    "N806",  # G / T / S are intentional math-style names (H = alpha*G + beta*T + gamma*S)
+    "UP006", "UP035", "UP007", "UP045",  # keep typing.Dict/Optional style for py3.10 pydantic compat
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["hybrid_fraud"]

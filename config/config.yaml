@@ -1,0 +1,44 @@
+# Hybrid Fraud Intelligence Configuration
+# Override the file location with the HFI_CONFIG environment variable and the
+# neo4j.* values with NEO4J_URI / NEO4J_USER / NEO4J_PASSWORD / NEO4J_DATABASE.
+
+model:
+  hidden_channels: 64
+  num_gnn_layers: 2
+  static_feature_dim: 32
+  dropout: 0.1
+  use_dynamic_attention: true
+
+# Prior for the fusion coefficients (alpha, beta, gamma). They are normalised and
+# turned into logits via log(), so softmax(logits) equals these values at initialisation.
+fusion:
+  initial_alpha: 0.40
+  initial_beta: 0.35
+  initial_gamma: 0.25
+
+# risk < approve -> approve; risk < review -> review; otherwise -> decline
+risk_thresholds:
+  approve: 0.30
+  review: 0.65
+
+neo4j:
+  uri: "bolt://localhost:7687"
+  user: "neo4j"
+  password: "password"   # development default only; set NEO4J_PASSWORD instead
+  database: "neo4j"
+  max_hops: 2
+  subgraph_timeout_ms: 80
+
+api:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 1
+
+# Training scripts are on the roadmap; these are reserved defaults.
+# Note: YAML 1.1 (PyYAML) needs "1.0e-5" - a bare "1e-5" is parsed as a string.
+training:
+  learning_rate: 0.001
+  batch_size: 32
+  epochs: 50
+  weight_decay: 1.0e-5
+  focal_loss_gamma: 2.0
