@@ -7,6 +7,21 @@ adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `hybrid_fraud.data.ieee_cis`: loader for the Kaggle IEEE-CIS Fraud Detection data
+  (`train_transaction.csv` + `train_identity.csv`). It downcasts dtypes, makes V1–V339 opt-in, supports
+  `nrows` / `sample_frac` / `usecols`, and accepts `id-XX` headers from the test files.
+  - `time_split`: chronological train / val / test split by `TransactionDT`, strict at tied timestamps.
+  - `TransactionFeaturizer`, fit on train rows only: signed log1p, median imputation, scaling,
+    missing-value flags, top-k one-hot and time-of-day / day-of-week.
+  - `build_ieee_cis_graph`: `HeteroData` with transaction nodes plus `card` (pseudo-user
+    `card1 + addr1 + (day - D1)` heuristic), `device`, `email`, `address` and `product` entities, reverse
+    edges and `edge_time`.
+  - `snapshot` (drops edges after a time) and `to_event_graph` (homogeneous view for `RBGNNPlus`).
+- `examples/train_ieee_cis.py`: logistic baseline, RBGNN+ and the heterogeneous RB-GNN on the same time
+  split, reporting val / test ROC-AUC and PR-AUC. It exits with Kaggle CLI download instructions if
+  the data is missing.
+- 22 IEEE-CIS tests on a generated **fake** fixture in the real schema: parsing, time split, leakage,
+  reverse edges, snapshots, event view, script end-to-end.
 - `RBGNNPlus` (`hybrid_fraud.models.rbgnn_plus`): temporal relational GNN for timestamped event
   graphs with learnable exponential **temporal decay**, TGAT-style **time encoding**, **edge attention
   softmax-normalised per destination node**, internal **reverse edges**, and an optional per-node GRU

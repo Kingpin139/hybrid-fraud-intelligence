@@ -23,8 +23,9 @@ H = αG + βT + γS
 | **α, β, γ** | Fusion coefficients (non-negative, sum to 1) | `AttentionFusion` – softmax over learnable logits (+ optional per-sample attention) |
 
 > **Project status: alpha (v0.1.0).** The model code, config, Neo4j schema, Docker setup and tests are in
-> place. **Training scripts, dataset loaders, Neo4j subgraph extraction and LLM explanations are not
-> implemented yet** (see the [roadmap](#roadmap)). The `/score` API endpoint currently returns a
+> place, plus an IEEE-CIS loader and a time-split training script. **No benchmark has been run in this
+> repository yet; Neo4j subgraph extraction, mini-batch training and LLM explanations are not implemented**
+> (see the [roadmap](#roadmap)). The `/score` API endpoint currently returns a
 > clearly-labelled *placeholder* heuristic (`"mode": "placeholder"`), not model output.
 
 ## Architecture
@@ -153,6 +154,52 @@ toy options. Numbers from the demo are smoke-test output on synthetic data, not 
 
 Build a model from the YAML config with `HybridFraudModel.from_config(load_config())`.
 
+### Data: IEEE-CIS Fraud Detection
+
+The loader in `hybrid_fraud.data.ieee_cis` reads the Kaggle
+[`ieee-fraud-detection`](https://www.kaggle.com/c/ieee-fraud-detection) files. The dataset is **not**
+included and must not be committed (`data/` is git-ignored). Accept the competition rules on Kaggle, then:
+
+```bash
+pip install kaggle                       # API token in ~/.kaggle/kaggle.json or KAGGLE_USERNAME / KAGGLE_KEY
+kaggle competitions download -c ieee-fraud-detection -p data/ieee-fraud-detection
+unzip data/ieee-fraud-detection/ieee-fraud-detection.zip -d data/ieee-fraud-detection
+```
+
+```python
+from hybrid_fraud.data import build_ieee_cis_graph, load_ieee_cis, snapshot, time_split, to_event_graph
+
+df = load_ieee_cis("data/ieee-fraud-detection", nrows=100_000)  # chronological prefix; V1-V339 opt-in
+split = time_split(df, val_frac=0.15, test_frac=0.15)           # by TransactionDT, no shuffling
+graph = build_ieee_cis_graph(df, split)                          # HeteroData + fitted featurizer
+train_view = snapshot(graph.data, split.train_end)               # edges up to the end of train only
+events = to_event_graph(graph.data)                              # homogeneous view for RBGNNPlus
+```
+
+- **Nodes:** `transaction` (features, `y = isFraud`, `time`, `train/val/test_mask`) and the entities `card`
+  (pseudo-user, see below), `device` (DeviceInfo), `email` (P_ and R_ domains share one node set), `address`
+  (addr1 + addr2) and `product` (ProductCD). Every relation has a `rev_*` reverse edge, and every edge has
+  `edge_time = TransactionDT`.
+- **Card / pseudo-user key** (`card_key`): `card1`, `card1_addr1`, or (default) `card1_addr1_d1`. The default
+  adds `floor(TransactionDT / 86400) - D1`, which is constant per account if D1 means "days since the
+  account was first seen" — a common heuristic from public solutions, not ground truth.
+- **Leakage controls:** the featurizer (imputation, scaling, category vocabularies) is fit on the training
+  period only. `isFraud`, `TransactionID` and raw `TransactionDT` are never features, and there is no target
+  encoding. Entity features are `[1, log1p(train-period degree)]`. Train, validate and test on time snapshots
+  (or with `RBGNNPlus(query_time=...)`) so no prediction uses later transactions.
+- **Memory:** columns are downcast (`float32` / `category`). V1–V339 are skipped unless you ask for them
+  (`v_columns=["V258", ...]` or `"all"`), and `nrows` / `sample_frac` limit the rows.
+
+Train the logistic baseline, RBGNN+ and the heterogeneous RB-GNN on the same time split:
+
+```bash
+python examples/train_ieee_cis.py --data-dir data/ieee-fraud-detection --nrows 100000 --epochs 50
+```
+
+The script prints val / test ROC-AUC and PR-AUC exactly as measured, with `--output results.json` to save
+them. Without the data it exits with the download instructions above. Training is full-batch: start with
+`--nrows`; mini-batch neighbour sampling is on the roadmap.
+
 ### API
 
 ```bash
@@ -200,13 +247,13 @@ settings. Set `HFI_CONFIG` to use another file; `NEO4J_URI`, `NEO4J_USER`, `NEO4
 hybrid-fraud-intelligence/
 ├── src/hybrid_fraud/
 │   ├── models/          # RBGNN, RBGNNPlus, TGNN, AttentionFusion, HybridFraudModel
-│   ├── data/            # Synthetic toy graph generator, stratified split
+│   ├── data/            # IEEE-CIS loader + graph builder, synthetic toy data
 │   ├── scoring/         # Risk engine (score -> decision)
 │   ├── api/             # FastAPI service
 │   └── config.py        # YAML + environment configuration
 ├── config/              # config.yaml
 ├── neo4j/               # Cypher schema and sample query
-├── examples/            # Inference demo, RBGNN+ synthetic-data demo
+├── examples/            # Inference demo, RBGNN+ synthetic demo, IEEE-CIS training script
 ├── tests/               # pytest suite
 ├── docs/                # Architecture notes
 ├── .github/             # CI workflow, issue and PR templates
@@ -240,7 +287,10 @@ CI runs ruff and pytest on Python 3.10 and 3.11 with CPU-only PyTorch.
 
 ## Roadmap
 
-- [ ] Dataset loaders (IEEE-CIS, PaySim, Elliptic, Amazon review fraud) and `HeteroData` graph builders
+- [x] IEEE-CIS loader + `HeteroData` / event-graph builder with a time-based split, and a training script
+- [ ] Run and publish IEEE-CIS results (dataset, split, seeds, mean ± std)
+- [ ] More dataset loaders (PaySim, Elliptic, Amazon review fraud)
+- [ ] Mini-batch training with time-respecting neighbour sampling, for the full 590k-transaction graph
 - [ ] Training / evaluation scripts (focal loss, class-imbalance handling) and measured benchmarks
 - [ ] Neo4j client: k-hop subgraph extraction within the latency budget (`neo4j.subgraph_timeout_ms`)
 - [ ] Wire trained weights into the API (replace the placeholder heuristic)

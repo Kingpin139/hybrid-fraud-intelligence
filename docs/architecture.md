@@ -94,6 +94,33 @@ Making this a first-class option of `HybridFraudModel` is on the roadmap.
 fraud-to-fraud edges, which also make fraud nodes high-degree) are explicit toy options. Metrics measured on
 synthetic data are not benchmarks.
 
+## IEEE-CIS graph (`hybrid_fraud.data.ieee_cis`)
+
+```
+transaction ──uses_card──▶ card      (pseudo-user: card1 + addr1 + floor(DT/86400) − D1)
+            ──uses_device─▶ device    (DeviceInfo)
+            ──p_email────▶ email     (P_emaildomain) ┐ one shared
+            ──r_email────▶ email     (R_emaildomain) ┘ node set
+            ──at_address─▶ address   (addr1 + addr2)
+            ──is_product─▶ product   (ProductCD)
+  + rev_<relation> for every edge type; edge_time = TransactionDT on every edge
+```
+
+- Missing keys create **no** edge (no giant "unknown" hub node).
+- `transaction.x` comes from `TransactionFeaturizer`, fit on the training period only. Entity `x` is
+  `[1, log1p(train-period degree)]`.
+- **Time split**: positional cut points in time order, then extended across tied timestamps, so
+  `max(train DT) < min(val DT)` and `max(val DT) < min(test DT)`.
+- **Evaluation protocol**: train on `snapshot(data, train_end)`, validate on `snapshot(data, val_end)`,
+  test on the full graph. RBGNN+ does the same through `query_time`, with a fixed `time_scale` equal to
+  the data's time span. This is snapshot-level causality: inside one period, a transaction can still see
+  later transactions' *features* in the same period, but never their labels or any later period.
+- `to_event_graph` concatenates all node types into one index space. Features are
+  `[transaction features | entity features | node-type one-hot]`, and only forward edges are included
+  (`RBGNNPlus` adds reverses).
+- Training is full-batch. A 590k-transaction graph fits on a large CPU box, but mini-batch
+  time-respecting neighbour sampling is the planned path to scale.
+
 ## Why this design?
 
 1. **Relational blindness** of tabular models is addressed by explicit multi-hop message passing.
