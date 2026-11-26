@@ -11,7 +11,6 @@ requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
     {name = "Tanvir Mahtab"},
-    {name = "Hybrid Theory Research"},
 ]
 keywords = ["fraud-detection", "gnn", "graph-neural-network", "pytorch-geometric", "neo4j", "temporal-graph"]
 classifiers = [

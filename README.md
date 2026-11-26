@@ -229,7 +229,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Bug reports and ideas are welcome via is
 ```bibtex
 @software{hybrid_fraud_intelligence,
   title  = {Hybrid Fraud Intelligence: RB-GNN + TGNN Architecture},
-  author = {Mahtab, Tanvir and {Hybrid Theory Research}},
+  author = {Mahtab, Tanvir},
   year   = {2026},
   url    = {https://github.com/Kingpin139/hybrid-fraud-intelligence}
 }
