@@ -4,6 +4,28 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- `RBGNNPlus` (`hybrid_fraud.models.rbgnn_plus`): temporal relational GNN for timestamped event
+  graphs with learnable exponential **temporal decay**, TGAT-style **time encoding**, **edge attention
+  softmax-normalised per destination node**, internal **reverse edges**, and an optional per-node GRU
+  **memory** (non-trainable buffer, written detached, explicit `reset()`). `Δt` is causal
+  (`query_time - edge_time >= 0`, edges after `query_time` are dropped) and scale-normalised.
+  `encode()` returns node embeddings that can be used as the `T` input of `AttentionFusion`.
+- `hybrid_fraud.data`: `generate_synthetic_fraud_graph` (no label signal by default; the feature
+  shift and bursty fraud-ring edges are opt-in toy options) and `stratified_node_split`.
+- `examples/rbgnn_plus_demo.py`: stratified split, class-weighted loss, best-validation
+  checkpointing, feature-only logistic baseline and a no-edges ablation. Output is labelled
+  *synthetic* — it is a smoke test, not a benchmark.
+- 25 tests for the above (attention sums to 1 per destination, no future edges, memory
+  reset / detach, reverse edges, shapes, synthetic generator, demo).
+
+### Notes
+- `HybridFraudModel` is unchanged and still uses the GRU `TGNN`; `RBGNNPlus` is a standalone module
+  (it needs a timestamped event graph, not per-target sequences). See `docs/architecture.md` for how
+  to plug it into fusion.
+
 ## [0.1.0] - 2026-11-27
 
 Initial public release.
