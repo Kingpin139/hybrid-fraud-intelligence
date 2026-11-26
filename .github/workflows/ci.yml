@@ -48,3 +48,5 @@ jobs:
         run: pytest
       - name: Run example
         run: python examples/inference_demo.py
+      - name: Run RBGNN+ demo (synthetic data)
+        run: python examples/rbgnn_plus_demo.py

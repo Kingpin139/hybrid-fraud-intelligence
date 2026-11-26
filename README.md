@@ -18,7 +18,7 @@ H = αG + βT + γS
 | Symbol | Meaning | Produced by |
 |--------|---------|-------------|
 | **G** | Graph embedding of the user (shared devices, IPs, cards, merchants, phones, e-mails) | `RBGNN` – heterogeneous GraphSAGE |
-| **T** | Temporal embedding of recent behaviour (velocity, bursts, drift) | `TGNN` – GRU sequence encoder |
+| **T** | Temporal embedding of recent behaviour (velocity, bursts, drift) | `TGNN` – GRU sequence encoder (or `RBGNNPlus` embeddings, see below) |
 | **S** | Static feature embedding | MLP static encoder |
 | **α, β, γ** | Fusion coefficients (non-negative, sum to 1) | `AttentionFusion` – softmax over learnable logits (+ optional per-sample attention) |
 
@@ -64,6 +64,14 @@ Dashed boxes are planned components (not yet implemented); the models, fusion, r
   - Only edge types present in the input `HeteroData` are used; node types that receive no messages keep
     their previous embedding (residual connection).
 - **TGNN** (`TGNN`) – GRU over a `[batch, seq_len, features]` sequence; can be replaced with TGAT/TGN/DySAT.
+- **RBGNN+** (`hybrid_fraud.models.RBGNNPlus`) – temporal relational GNN for a timestamped event graph:
+  learnable exponential temporal decay, TGAT-style time encoding, edge attention softmax-normalised per
+  destination node, reverse edges, causal scale-normalised `Δt` (edges after `query_time` are ignored) and an
+  optional per-node GRU memory (detached buffer with explicit `reset()`). It is a **standalone module**:
+  `HybridFraudModel` still uses the GRU `TGNN`, and `RBGNNPlus.encode(...)[target_rows]` can be passed as `T`
+  to `AttentionFusion` (see [docs/architecture.md](docs/architecture.md#rbgnn-temporal-relational-gnn)).
+  A runnable demo on **synthetic** data is in [`examples/rbgnn_plus_demo.py`](examples/rbgnn_plus_demo.py)
+  — it is a smoke test, not a benchmark.
 - **Attention fusion** (`AttentionFusion`) – the learnable parameters are **logits**; coefficients are
   `softmax(logits)`. They are initialised with `log(prior)`, so training starts exactly at the configured
   `0.40 / 0.35 / 0.25`. With `use_dynamic_attention=True`, an MLP adds per-sample logits (zero-initialised,
@@ -124,6 +132,25 @@ A runnable version is in [`examples/inference_demo.py`](examples/inference_demo.
 python examples/inference_demo.py
 ```
 
+#### RBGNN+ on a timestamped event graph
+
+```python
+from hybrid_fraud.data import generate_synthetic_fraud_graph
+from hybrid_fraud.models import RBGNNPlus
+
+x, edge_index, edge_time, y = generate_synthetic_fraud_graph(num_nodes=200, num_edges=800)  # synthetic
+model = RBGNNPlus(in_dim=x.size(1), hidden_dim=32, out_dim=2)
+logits = model(x, edge_index, edge_time)                      # [200, 2]
+emb = model.encode(x, edge_index, edge_time, query_time=60.0) # only edges with t <= 60 are used
+```
+
+```bash
+python examples/rbgnn_plus_demo.py   # synthetic data, stratified split, baseline + ablation
+```
+
+The generator injects **no** label signal by default; `feature_signal` and `ring_edge_fraction` are explicit
+toy options. Numbers from the demo are smoke-test output on synthetic data, not benchmarks.
+
 Build a model from the YAML config with `HybridFraudModel.from_config(load_config())`.
 
 ### API
@@ -172,13 +199,14 @@ settings. Set `HFI_CONFIG` to use another file; `NEO4J_URI`, `NEO4J_USER`, `NEO4
 ```
 hybrid-fraud-intelligence/
 ├── src/hybrid_fraud/
-│   ├── models/          # RBGNN, TGNN, AttentionFusion, HybridFraudModel
+│   ├── models/          # RBGNN, RBGNNPlus, TGNN, AttentionFusion, HybridFraudModel
+│   ├── data/            # Synthetic toy graph generator, stratified split
 │   ├── scoring/         # Risk engine (score -> decision)
 │   ├── api/             # FastAPI service
 │   └── config.py        # YAML + environment configuration
 ├── config/              # config.yaml
 ├── neo4j/               # Cypher schema and sample query
-├── examples/            # Runnable inference demo
+├── examples/            # Inference demo, RBGNN+ synthetic-data demo
 ├── tests/               # pytest suite
 ├── docs/                # Architecture notes
 ├── .github/             # CI workflow, issue and PR templates
@@ -216,7 +244,11 @@ CI runs ruff and pytest on Python 3.10 and 3.11 with CPU-only PyTorch.
 - [ ] Training / evaluation scripts (focal loss, class-imbalance handling) and measured benchmarks
 - [ ] Neo4j client: k-hop subgraph extraction within the latency budget (`neo4j.subgraph_timeout_ms`)
 - [ ] Wire trained weights into the API (replace the placeholder heuristic)
-- [ ] Temporal GNN variants (TGAT, TGN, DySAT)
+- [x] RBGNN+ temporal relational GNN (decay, time encoding, per-destination attention, memory) — standalone, synthetic-data demo only
+- [ ] Wire `RBGNNPlus` into `HybridFraudModel` as a selectable temporal encoder (needs a timestamped event graph per batch)
+- [ ] Full temporal GNN variants: chronological batching with time-respecting neighbour sampling (TGAT), TGN message store
+  and memory updates, DySAT
+- [ ] Experiment runner: seeds, time-based splits, baselines (logistic / MLP / static SAGE), mean ± std over runs
 - [ ] Explainability: path tracing, fusion-weight reporting, optional LLM narratives
 - [ ] Streaming ingestion (e.g. Kafka) and online updates for concept drift
 
