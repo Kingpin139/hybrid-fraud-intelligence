@@ -27,6 +27,10 @@ adheres to [Semantic Versioning](https://semver.org/).
   - `--patience` adds early stopping for the graph models.
   - `--model` accepts a comma list, and results record best epoch / iteration, epochs run and seconds
     per model.
+- `hybrid_fraud.data.graph_features.entity_aggregate_features`: leakage-safe per-entity aggregates for
+  tabular models. It computes past-only counts, amount stats, recency and a smoothed fraud rate from
+  training labels only, and `examples/train_ieee_cis.py --lgbm-graph-features` uses it for LightGBM
+  (opt-in; default runs are unchanged).
 - Optional dependency extra `lightgbm` in `pyproject.toml`.
 - 22 IEEE-CIS tests on a generated **fake** fixture in the real schema: parsing, time split, leakage,
   reverse edges, snapshots, event view, script end-to-end.

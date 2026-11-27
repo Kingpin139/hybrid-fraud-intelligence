@@ -200,6 +200,15 @@ Add `--model logistic,lightgbm` (after `pip install -e ".[lightgbm]"`) for a gra
 baseline, `--lgbm-raw-v` to give it the raw V1–V339 columns, and `--epochs 200 --patience 25` for early
 stopping of the graph models.
 
+`--lgbm-graph-features` feeds the graph's neighbourhood signal to LightGBM as tabular features
+(`hybrid_fraud.data.graph_features`). For each entity (pseudo-user, card1, address, payer / recipient
+e-mail domain, device) every transaction gets past-only aggregates: count of strictly earlier
+transactions, their mean amount and the amount ratio, seconds since the previous one, and a smoothed
+fraud rate computed from **training-period labels only**. Validation / test labels are never read,
+and ties at the same timestamp are excluded. For training rows the fraud rate uses earlier training
+labels as if they were already known (IEEE-CIS labels arrive with a chargeback delay), so it is
+optimistic for training rows but not for evaluation.
+
 The script prints val / test ROC-AUC and PR-AUC exactly as measured, with `--output results.json` to save
 them. Without the data it exits with the download instructions above. Training is full-batch: start with
 `--nrows`; mini-batch neighbour sampling is on the roadmap.
