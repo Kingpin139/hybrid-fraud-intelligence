@@ -20,6 +20,14 @@ adheres to [Semantic Versioning](https://semver.org/).
 - `examples/train_ieee_cis.py`: logistic baseline, RBGNN+ and the heterogeneous RB-GNN on the same time
   split, reporting val / test ROC-AUC and PR-AUC. It exits with Kaggle CLI download instructions if
   the data is missing.
+- `examples/train_ieee_cis.py`:
+  - `--model lightgbm` adds a gradient-boosted tree baseline. It needs the new `lightgbm` extra and is
+    early-stopped on validation PR-AUC.
+  - `--lgbm-raw-v` appends the raw V1–V339 columns for the tree model only.
+  - `--patience` adds early stopping for the graph models.
+  - `--model` accepts a comma list, and results record best epoch / iteration, epochs run and seconds
+    per model.
+- Optional dependency extra `lightgbm` in `pyproject.toml`.
 - 22 IEEE-CIS tests on a generated **fake** fixture in the real schema: parsing, time split, leakage,
   reverse edges, snapshots, event view, script end-to-end.
 - `RBGNNPlus` (`hybrid_fraud.models.rbgnn_plus`): temporal relational GNN for timestamped event
@@ -35,6 +43,9 @@ adheres to [Semantic Versioning](https://semver.org/).
   *synthetic* — it is a smoke test, not a benchmark.
 - 25 tests for the above (attention sums to 1 per destination, no future edges, memory
   reset / detach, reverse edges, shapes, synthetic generator, demo).
+
+### Fixed
+- `examples/train_ieee_cis.py --v-columns all` silently loaded no V columns; it now loads V1–V339.
 
 ### Notes
 - `HybridFraudModel` is unchanged and still uses the GRU `TGNN`; `RBGNNPlus` is a standalone module
