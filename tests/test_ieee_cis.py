@@ -297,3 +297,42 @@ def test_training_script_missing_data_is_helpful(tmp_path, capsys):
     assert exc.value.code == 2
     err = capsys.readouterr().err
     assert "kaggle competitions download -c ieee-fraud-detection" in err and "rules" in err
+
+
+def test_training_script_lightgbm_baseline(ieee_cis_dir):
+    pytest.importorskip("lightgbm")
+    script = _load_script()
+    base = ["--data-dir", str(ieee_cis_dir), "--lgbm-rounds", "30"]
+    res = script.main([*base, "--model", "logistic,lightgbm"])
+    assert {"logistic", "lightgbm"} <= set(res) and "rbgnn_plus" not in res
+    lgbm = res["lightgbm"]
+    assert 1 <= lgbm["best_iteration"] <= 30
+    for phase in ("val", "test"):
+        assert 0.0 <= lgbm[phase]["pr_auc"] <= 1.0
+    raw = script.main([*base, "--model", "lightgbm", "--lgbm-raw-v"])
+    assert raw["data"]["lgbm_raw_v"] is True
+    # Raw V columns go to the tree model only; the shared (scaled) features are unchanged.
+    assert raw["data"]["features"] == res["data"]["features"]
+
+
+def test_training_script_v_columns_all_and_model_validation(ieee_cis_dir):
+    script = _load_script()
+    base = ["--data-dir", str(ieee_cis_dir), "--model", "logistic"]
+    no_v = script.main(base)["data"]["features"]
+    with_v = script.main([*base, "--v-columns", "all"])["data"]["features"]
+    assert with_v > no_v + 300  # 339 V columns (+ missing flags) reach the featurizer
+    with pytest.raises(SystemExit, match="Unknown model"):
+        script.main(["--data-dir", str(ieee_cis_dir), "--model", "xgboost"])
+
+
+def test_training_script_early_stopping_patience(ieee_cis_dir):
+    res = _load_script().main(
+        [
+            "--data-dir", str(ieee_cis_dir), "--model", "hetero",
+            "--epochs", "40", "--patience", "2", "--hidden", "8",
+        ]
+    )  # fmt: skip
+    r = res["hetero"]
+    assert r["epochs_run"] <= 40 and r["best_epoch"] < r["epochs_run"]
+    assert r["epochs_run"] - 1 - r["best_epoch"] <= 2 or r["epochs_run"] == 40
+    assert r["seconds"] >= 0

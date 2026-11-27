@@ -43,6 +43,9 @@ dev = [
     "ruff>=0.4.0",
     "mypy>=1.7.0",
 ]
+lightgbm = [
+    "lightgbm>=4.0",  # tree baseline in examples/train_ieee_cis.py
+]
 jupyter = [
     "jupyter>=1.0.0",
     "matplotlib>=3.8.0",

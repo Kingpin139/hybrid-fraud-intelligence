@@ -196,6 +196,10 @@ Train the logistic baseline, RBGNN+ and the heterogeneous RB-GNN on the same tim
 python examples/train_ieee_cis.py --data-dir data/ieee-fraud-detection --nrows 100000 --epochs 50
 ```
 
+Add `--model logistic,lightgbm` (after `pip install -e ".[lightgbm]"`) for a gradient-boosted tree
+baseline, `--lgbm-raw-v` to give it the raw V1–V339 columns, and `--epochs 200 --patience 25` for early
+stopping of the graph models.
+
 The script prints val / test ROC-AUC and PR-AUC exactly as measured, with `--output results.json` to save
 them. Without the data it exits with the download instructions above. Training is full-batch: start with
 `--nrows`; mini-batch neighbour sampling is on the roadmap.
