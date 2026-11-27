@@ -9,6 +9,8 @@ Models (all evaluated on the same chronological val / test periods):
 * ``lightgbm`` — gradient-boosted trees on the same transaction features (optional dependency:
   ``pip install -e ".[lightgbm]"``), early-stopped on validation PR-AUC. ``--lgbm-raw-v`` appends
   the raw V1–V339 columns (trees need no scaling, so nothing is fit on val / test).
+  ``--lgbm-graph-features`` appends leakage-safe entity aggregates (graph neighbourhood
+  summaries, see ``hybrid_fraud.data.graph_features``).
 * ``hetero`` — the heterogeneous :class:`hybrid_fraud.models.RBGNN` + a linear head on transaction
   nodes, trained / evaluated on time snapshots of the graph.
 
@@ -36,6 +38,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import average_precision_score, roc_auc_score
 
 from hybrid_fraud.data import build_ieee_cis_graph, load_ieee_cis, snapshot, time_split
+from hybrid_fraud.data.graph_features import entity_aggregate_features
 from hybrid_fraud.data.ieee_cis import DOWNLOAD_HELP, IDENTITY_FILE, TRANSACTION_FILE
 from hybrid_fraud.data.ieee_cis import to_event_graph as _to_event_graph
 from hybrid_fraud.models import RBGNN, RBGNNPlus
@@ -173,6 +176,10 @@ def run(args: argparse.Namespace) -> Dict[str, object]:
         v_raw = df[v_all].to_numpy(dtype=np.float32)
         df = df.drop(columns=[c for c in v_all if c not in keep])
     graph = build_ieee_cis_graph(df, split, card_key=args.card_key)
+    graph_feats: Optional[np.ndarray] = None
+    if args.lgbm_graph_features and "lightgbm" in models:
+        # Past-only entity aggregates + train-label target encodings (see graph_features.py).
+        graph_feats, _ = entity_aggregate_features(df, split, card_key=args.card_key)
     data = graph.data
     tx = data["transaction"]
     days = lambda s: s / 86_400  # noqa: E731
@@ -188,6 +195,7 @@ def run(args: argparse.Namespace) -> Dict[str, object]:
         "models": models,
         "seed": args.seed,
         "lgbm_raw_v": bool(raw_v),
+        "lgbm_graph_features": graph_feats is not None,
     }
     del df
 
@@ -211,6 +219,8 @@ def run(args: argparse.Namespace) -> Dict[str, object]:
     if "lightgbm" in models:
         feats = tx.x.numpy()
         xs = {p: feats[masks[p].numpy()] for p in masks}
+        if graph_feats is not None:
+            xs = {p: np.hstack([xs[p], graph_feats[masks[p].numpy()]]) for p in masks}
         if v_raw is not None:
             xs = {p: np.hstack([xs[p], v_raw[masks[p].numpy()]]) for p in masks}
         results["lightgbm"] = train_lightgbm(
@@ -299,6 +309,12 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     p.add_argument("--lgbm-rounds", type=int, default=3000, help="max LightGBM boosting rounds")
     p.add_argument(
         "--lgbm-raw-v", action="store_true", help="append raw V1-V339 to LightGBM's features"
+    )
+    p.add_argument(
+        "--lgbm-graph-features",
+        action="store_true",
+        help="append leakage-safe entity aggregates (past counts, amounts, recency, train-label "
+        "fraud rates per pseudo-user / card1 / address / e-mail / device) to LightGBM's features",
     )
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--output", default=None, help="optional JSON file for the results")
